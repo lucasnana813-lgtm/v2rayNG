@@ -90,9 +90,50 @@ jobs:
         key: lt-keystore-v1
 
     - name: Create signing key
-      if: steps.key-restore.outputs.cache-hit != 'tru
+      if: steps.key-restore.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p ${{ github.workspace }}/lt-keystore
+        keytool -genkeypair -keystore ${{ github.workspace }}/lt-keystore/lt.jks -storepass lighttunnel -keypass lighttunnel -alias light -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Light Tunnel"
 
-on:
-  workflow_dispatch:
-    inputs:
-      
+    - name: Save signing key
+      if: steps.key-restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ github.workspace }}/lt-keystore
+        key: lt-keystore-v1
+
+    - name: Build APK
+      run: |
+        cd ${{ github.workspace }}/V2rayNG
+        echo "sdk.dir=${ANDROID_HOME}" > local.properties
+        chmod 755 gradlew
+        ./gradlew licenseFdroidReleaseReport
+        ./gradlew assembleRelease -Pandroid.injected.signing.store.file=${{ github.workspace }}/lt-keystore/lt.jks -Pandroid.injected.signing.store.password=lighttunnel -Pandroid.injected.signing.key.alias=light -Pandroid.injected.signing.key.password=lighttunnel
+
+    - name: Upload arm64-v8a APK
+      uses: actions/upload-artifact@v7
+      if: ${{ success() }}
+      with:
+        name: arm64-v8a
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*arm64-v8a*.apk
+
+    - name: Upload armeabi-v7a APK
+      uses: actions/upload-artifact@v7
+      if: ${{ success() }}
+      with:
+        name: armeabi-v7a
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*armeabi-v7a*.apk
+
+    - name: Upload x86 APK
+      uses: actions/upload-artifact@v7
+      if: ${{ success() }}
+      with:
+        name: x86-apk
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*x86*.apk
+
+    - name: Upload universal APK
+      uses: actions/upload-artifact@v7
+      if: ${{ success() }}
+      with:
+        name: universal-apk
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*universal*.apk
